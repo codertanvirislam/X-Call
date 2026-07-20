@@ -1,0 +1,217 @@
+// X-Call customer portal schema
+// Simple reseller portal: auth, KYC, packages, payment, selx provisioning
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ServiceType {
+  HUMAN
+  AI
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PROVISIONING
+  ACTIVE
+  PAYMENT_FAILED
+  PROVISIONING_FAILED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXHAUSTED
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+model User {
+  id              String    @id @default(cuid())
+  phone           String    @unique
+  name            String?
+  passwordHash    String?
+  role            Role      @default(USER)
+  phoneVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  kyc            KycSubmission?
+  orders         Order[]
+  subscriptions  Subscription[]
+  selxCredential SelxCredential?
+  auditLogs      AuditLog[]      @relation("AuditActor")
+
+  @@index([role])
+}
+
+model OtpChallenge {
+  id          String    @id @default(cuid())
+  phone       String
+  codeHash    String
+  purpose     String
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([phone, purpose])
+}
+
+model KycSubmission {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName      String
+  nidNumber     String
+  frontFileKey  String
+  backFileKey   String
+  frontMimeType String
+  backMimeType  String
+  status        KycStatus @default(PENDING)
+  rejectReason  String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status])
+  @@index([nidNumber])
+}
+
+model Package {
+  id           String      @id @default(cuid())
+  code         String      @unique
+  name         String
+  description  String?
+  serviceType  ServiceType
+  priceBdt     Int
+  minutes      Int
+  validityDays Int
+  features     String      @default("")
+  isActive     Boolean     @default(true)
+  sortOrder    Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  orders Order[]
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  userId         String
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packageId      String
+  package        Package     @relation(fields: [packageId], references: [id])
+  packageCode    String
+  packageName    String
+  serviceType    ServiceType
+  priceBdt       Int
+  minutes        Int
+  validityDays   Int
+  features       String
+  status         OrderStatus @default(PENDING_PAYMENT)
+  provisionError String?
+  paidAt         DateTime?
+  activatedAt    DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  payment      Payment?
+  subscription Subscription?
+
+  @@index([userId, status])
+  @@index([status])
+}
+
+model Payment {
+  id                String        @id @default(cuid())
+  orderId           String        @unique
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider          String
+  providerPaymentId String?
+  amountBdt         Int
+  status            PaymentStatus @default(PENDING)
+  rawPayload        String?
+  paidAt            DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([providerPaymentId])
+  @@index([status])
+}
+
+model Subscription {
+  id           String             @id @default(cuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId      String             @unique
+  order        Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  serviceType  ServiceType
+  packageCode  String
+  packageName  String
+  minutesTotal Int
+  status       SubscriptionStatus @default(ACTIVE)
+  startsAt     DateTime           @default(now())
+  expiresAt    DateTime
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([userId, status])
+  @@index([expiresAt, status])
+}
+
+model SelxCredential {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  selxUserId           Int
+  selxUserSlug         String?
+  bearerTokenEnc       String
+  extension            String?
+  extensionPasswordEnc String?
+  webhookSecretEnc     String?
+  phoneNumber          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String?
+  entityId   String?
+  meta       String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
