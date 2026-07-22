@@ -17,8 +17,13 @@ export async function POST(req: Request) {
     const phone = normalizeBdPhone(body.phone);
     if (!phone) return jsonError("Enter a valid Bangladesh mobile number");
 
-    const existing = await prisma.user.findUnique({ where: { phone } });
+    const existing = await prisma.storeUser.findUnique({ where: { phone } });
+    const adminExists = await prisma.admin.findUnique({ where: { phone } });
 
+    // Phones belonging to a platform admin can't self-serve via OTP.
+    if (adminExists) {
+      return jsonOk({ ok: true, message: "If eligible, an OTP was sent" });
+    }
     if (body.purpose === "SIGNUP" && existing?.passwordHash) {
       // Same response shape to reduce enumeration
       return jsonOk({ ok: true, message: "If eligible, an OTP was sent" });

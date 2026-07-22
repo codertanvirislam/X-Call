@@ -6,19 +6,19 @@ import { selxTenantGet, type SelxCall } from "@/lib/selx";
 
 export async function GET(
   req: Request,
-  ctx: { params: Promise<{ userId: string }> },
+  ctx: { params: Promise<{ storeId: string }> },
 ) {
   try {
     await requireAdmin();
-    const { userId } = await ctx.params;
+    const { storeId } = await ctx.params;
     const limit = Math.min(
       Number(new URL(req.url).searchParams.get("limit") || 30),
       100,
     );
 
-    const cred = await prisma.selxCredential.findUnique({ where: { userId } });
+    const cred = await prisma.selxCredential.findUnique({ where: { storeId } });
     if (!cred?.bearerTokenEnc) {
-      return jsonError("User has no selx credentials yet", 404);
+      return jsonError("Store has no selx credentials yet", 404);
     }
 
     const token = decryptSecret(cred.bearerTokenEnc);

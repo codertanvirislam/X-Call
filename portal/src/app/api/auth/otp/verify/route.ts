@@ -47,40 +47,53 @@ export async function POST(req: Request) {
       data: { consumedAt: new Date() },
     });
 
-    let user = await prisma.user.findUnique({ where: { phone } });
-    if (!user) {
-      user = await prisma.user.create({
+    let storeUser = await prisma.storeUser.findUnique({ where: { phone } });
+    if (!storeUser) {
+      // Brand-new signup: create a store and make this person its owner.
+      const store = await prisma.store.create({
         data: {
-          phone,
           name: body.name,
-          phoneVerifiedAt: new Date(),
-          role: "USER",
+          phone,
+          members: {
+            create: {
+              phone,
+              name: body.name,
+              role: "OWNER",
+              status: "INVITED", // becomes ACTIVE once password is set
+              phoneVerifiedAt: new Date(),
+            },
+          },
         },
+        include: { members: true },
       });
-    } else if (!user.phoneVerifiedAt) {
-      user = await prisma.user.update({
-        where: { id: user.id },
+      storeUser = store.members[0];
+    } else if (!storeUser.phoneVerifiedAt) {
+      // Owner-invited employee (or unverified owner) verifying for the first time.
+      storeUser = await prisma.storeUser.update({
+        where: { id: storeUser.id },
         data: {
           phoneVerifiedAt: new Date(),
-          name: body.name || user.name,
+          name: body.name || storeUser.name,
         },
       });
     }
 
-    // Temporary session so user can set/reset password
+    // Temporary session so the person can set/reset their password
     await setSessionCookie({
-      userId: user.id,
-      role: user.role,
-      phone: user.phone,
+      kind: "STORE",
+      userId: storeUser.id,
+      phone: storeUser.phone,
+      storeId: storeUser.storeId,
+      storeRole: storeUser.role,
     });
 
     return jsonOk({
       ok: true,
-      needsPassword: !user.passwordHash || body.purpose === "RESET_PASSWORD",
+      needsPassword: !storeUser.passwordHash || body.purpose === "RESET_PASSWORD",
       user: {
-        id: user.id,
-        phone: user.phone,
-        name: user.name,
+        id: storeUser.id,
+        phone: storeUser.phone,
+        name: storeUser.name,
       },
     });
   } catch (err) {

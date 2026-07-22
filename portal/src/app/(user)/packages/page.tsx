@@ -53,6 +53,21 @@ export default function PackagesPage() {
         return;
       }
 
+      if (data.paymentMode === "eps") {
+        const pay = await fetch("/api/payments/eps/initiate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: data.order.id }),
+        });
+        const payData = await pay.json();
+        if (!pay.ok || !payData.redirectUrl) {
+          throw new Error(payData.error || "Could not start EPS payment");
+        }
+        // Hand off to the EPS hosted payment page.
+        window.location.assign(payData.redirectUrl);
+        return;
+      }
+
       router.push("/orders");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed");

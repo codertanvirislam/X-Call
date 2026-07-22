@@ -3,11 +3,22 @@
 import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Card, Input, statusTone } from "@/components/ui";
 
-type UserRow = {
+type Member = {
   id: string;
   phone: string;
   name: string | null;
+  role: "OWNER" | "EMPLOYEE";
+  status: string;
+};
+
+type StoreRow = {
+  id: string;
+  name: string | null;
+  phone: string | null;
   createdAt: string;
+  owner: Member | null;
+  employeeCount: number;
+  members: Member[];
   kyc: { status: string; nidNumber: string } | null;
   selxCredential: {
     selxUserId: number;
@@ -23,8 +34,8 @@ type UserRow = {
   }>;
 };
 
-export default function AdminUsersPage() {
-  const [users, setUsers] = useState<UserRow[]>([]);
+export default function AdminStoresPage() {
+  const [stores, setStores] = useState<StoreRow[]>([]);
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -34,13 +45,13 @@ export default function AdminUsersPage() {
 
   async function load(query = q) {
     setError("");
-    const res = await fetch(`/api/admin/users?q=${encodeURIComponent(query)}`);
+    const res = await fetch(`/api/admin/stores?q=${encodeURIComponent(query)}`);
     const data = await res.json();
     if (!res.ok) {
       setError(data.error || "Failed");
       return;
     }
-    setUsers(data.users || []);
+    setStores(data.stores || []);
   }
 
   useEffect(() => {
@@ -48,16 +59,16 @@ export default function AdminUsersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function inspect(userId: string) {
-    setSelected(userId);
+  async function inspect(storeId: string) {
+    setSelected(storeId);
     setBusy(true);
     setBalance("");
     setUsage([]);
     setError("");
     try {
       const [bRes, uRes] = await Promise.all([
-        fetch(`/api/admin/users/${userId}/balance`),
-        fetch(`/api/admin/users/${userId}/usage?limit=20`),
+        fetch(`/api/admin/stores/${storeId}/balance`),
+        fetch(`/api/admin/stores/${storeId}/usage?limit=20`),
       ]);
       const bData = await bRes.json();
       const uData = await uRes.json();
@@ -80,14 +91,15 @@ export default function AdminUsersPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold">Users</h1>
+      <h1 className="text-2xl font-semibold">Stores</h1>
       <p className="mt-1 text-sm text-muted">
-        Lookup live balance and usage from call-center backend using user token
+        Each store has one owner and its employees. Lookup live balance and usage
+        from the call-center backend using the store token.
       </p>
 
       <div className="mt-4 flex gap-2">
         <Input
-          placeholder="Search phone or name"
+          placeholder="Search phone or store name"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -97,20 +109,25 @@ export default function AdminUsersPage() {
       {error ? <div className="mt-4"><Alert>{error}</Alert></div> : null}
 
       <div className="mt-6 space-y-3">
-        {users.map((u) => (
-          <Card key={u.id}>
+        {stores.map((s) => (
+          <Card key={s.id}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="font-semibold">{u.name || "Unnamed user"}</h2>
-                <p className="text-sm text-muted">{u.phone}</p>
+                <h2 className="font-semibold">{s.name || "Unnamed store"}</h2>
+                <p className="text-sm text-muted">
+                  Owner: {s.owner?.name || "—"} · {s.owner?.phone || s.phone}
+                </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <Badge tone={statusTone(u.kyc?.status || "NOT_STARTED")}>
-                    KYC: {u.kyc?.status || "NOT_STARTED"}
+                  <Badge tone={statusTone(s.kyc?.status || "NOT_STARTED")}>
+                    KYC: {s.kyc?.status || "NOT_STARTED"}
                   </Badge>
-                  {u.selxCredential ? (
+                  <Badge>
+                    {s.employeeCount} employee{s.employeeCount === 1 ? "" : "s"}
+                  </Badge>
+                  {s.selxCredential ? (
                     <Badge tone="blue">
-                      selx #{u.selxCredential.selxUserId}
-                      {u.selxCredential.hasToken ? "" : " (token pending)"}
+                      selx #{s.selxCredential.selxUserId}
+                      {s.selxCredential.hasToken ? "" : " (token pending)"}
                     </Badge>
                   ) : (
                     <Badge>no backend user</Badge>
@@ -119,25 +136,36 @@ export default function AdminUsersPage() {
               </div>
               <Button
                 variant="secondary"
-                disabled={busy && selected === u.id}
-                onClick={() => inspect(u.id)}
+                disabled={busy && selected === s.id}
+                onClick={() => inspect(s.id)}
               >
                 View balance/usage
               </Button>
             </div>
 
-            {u.subscriptions.length > 0 ? (
+            {s.members.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2 text-sm">
+                {s.members.map((m) => (
+                  <Badge key={m.id} tone={m.role === "OWNER" ? "blue" : undefined}>
+                    {m.role === "OWNER" ? "Owner" : "Employee"}: {m.name || m.phone}
+                    {m.status !== "ACTIVE" ? ` (${m.status.toLowerCase()})` : ""}
+                  </Badge>
+                ))}
+              </div>
+            ) : null}
+
+            {s.subscriptions.length > 0 ? (
               <div className="mt-3 space-y-1 text-sm">
-                {u.subscriptions.map((s) => (
-                  <p key={s.id} className="text-muted">
-                    {s.packageName} · {s.minutesTotal} min · {s.status} · exp{" "}
-                    {new Date(s.expiresAt).toLocaleDateString()}
+                {s.subscriptions.map((sub) => (
+                  <p key={sub.id} className="text-muted">
+                    {sub.packageName} · {sub.minutesTotal} min · {sub.status} · exp{" "}
+                    {new Date(sub.expiresAt).toLocaleDateString()}
                   </p>
                 ))}
               </div>
             ) : null}
 
-            {selected === u.id ? (
+            {selected === s.id ? (
               <div className="mt-4 rounded-xl bg-slate-50 p-3">
                 <p className="text-sm font-medium">Live balance: {balance || "—"}</p>
                 <div className="mt-3 overflow-x-auto">

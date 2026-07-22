@@ -48,7 +48,8 @@ export async function markOrderPaid(opts: {
   });
 
   await writeAudit({
-    actorId: order.userId,
+    actorId: order.storeId,
+    actorType: "STORE_USER",
     action: "PAYMENT_SUCCESS",
     entityType: "Order",
     entityId: order.id,

@@ -9,7 +9,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       take: 100,
       include: {
-        user: { select: { id: true, phone: true, name: true } },
+        store: { select: { id: true, phone: true, name: true } },
         payment: true,
         subscription: true,
       },

@@ -12,7 +12,7 @@ type KycItem = {
   frontUrl?: string | null;
   backUrl?: string | null;
   createdAt: string;
-  user: { id: string; phone: string; name: string | null };
+  store: { id: string; phone: string | null; name: string | null };
 };
 
 export default function AdminKycPage() {
@@ -92,7 +92,7 @@ export default function AdminKycPage() {
               <div>
                 <h2 className="font-semibold">{item.fullName}</h2>
                 <p className="text-sm text-muted">
-                  {item.user.phone} · NID {item.nidNumber}
+                  {item.store.phone} · NID {item.nidNumber}
                 </p>
                 <p className="mt-1 text-xs text-muted">
                   {new Date(item.createdAt).toLocaleString()}

@@ -1,15 +1,19 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { env } from "./env";
-import type { Role } from "@/generated/prisma/client";
+import type { StoreRole } from "@/generated/prisma/client";
 
 const COOKIE_NAME = "xcall_session";
 const MAX_AGE = 60 * 60 * 24 * 14; // 14 days
 
+export type SessionKind = "ADMIN" | "STORE";
+
 export type SessionPayload = {
-  userId: string;
-  role: Role;
+  kind: SessionKind;
+  userId: string; // Admin.id or StoreUser.id
   phone: string;
+  storeId?: string; // present when kind === "STORE"
+  storeRole?: StoreRole; // OWNER | EMPLOYEE, when kind === "STORE"
 };
 
 function secretKey() {
@@ -29,15 +33,23 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
     const { payload } = await jwtVerify(token, secretKey());
     if (
       typeof payload.userId !== "string" ||
-      typeof payload.role !== "string" ||
-      typeof payload.phone !== "string"
+      typeof payload.phone !== "string" ||
+      (payload.kind !== "ADMIN" && payload.kind !== "STORE")
     ) {
       return null;
     }
+    if (payload.kind === "STORE" && typeof payload.storeId !== "string") {
+      return null;
+    }
     return {
+      kind: payload.kind,
       userId: payload.userId,
-      role: payload.role as Role,
       phone: payload.phone,
+      storeId: typeof payload.storeId === "string" ? payload.storeId : undefined,
+      storeRole:
+        payload.storeRole === "OWNER" || payload.storeRole === "EMPLOYEE"
+          ? (payload.storeRole as StoreRole)
+          : undefined,
     };
   } catch {
     return null;

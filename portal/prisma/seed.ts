@@ -100,18 +100,16 @@ async function main() {
 
   if (adminPhone && adminPassword) {
     const passwordHash = await bcrypt.hash(adminPassword, 12);
-    await prisma.user.upsert({
+    await prisma.admin.upsert({
       where: { phone: adminPhone },
       create: {
         phone: adminPhone,
         name: adminName,
-        role: "ADMIN",
         passwordHash,
         phoneVerifiedAt: new Date(),
       },
       update: {
         name: adminName,
-        role: "ADMIN",
         passwordHash,
         phoneVerifiedAt: new Date(),
       },

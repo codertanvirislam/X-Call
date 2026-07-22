@@ -10,7 +10,6 @@ type MeResponse = {
   credentials: {
     selxUserId: number;
     selxUserSlug?: string | null;
-    apiToken: string | null;
     hasToken: boolean;
   } | null;
   subscriptions: Array<{
@@ -28,7 +27,6 @@ export default function DashboardPage() {
   const [data, setData] = useState<MeResponse | null>(null);
   const [balance, setBalance] = useState<{ balance_minutes: number; balance_seconds: number } | null>(null);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
 
   async function load() {
     setError("");
@@ -52,13 +50,6 @@ export default function DashboardPage() {
   useEffect(() => {
     load();
   }, []);
-
-  async function copyToken() {
-    if (!data?.credentials?.apiToken) return;
-    await navigator.clipboard.writeText(data.credentials.apiToken);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
 
   if (!data) {
     return (
@@ -115,41 +106,25 @@ export default function DashboardPage() {
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <Card>
-          <h2 className="font-semibold">API credentials</h2>
+          <h2 className="font-semibold">Calling account</h2>
           {!data.credentials ? (
             <p className="mt-2 text-sm text-muted">
-              No credentials yet. Complete KYC and buy a package.
+              Not ready yet. Complete KYC and buy a package to activate calling.
             </p>
           ) : (
-            <div className="mt-3 space-y-3 text-sm">
-              <div>
-                <p className="text-muted">Selx User ID</p>
-                <p className="font-mono">{data.credentials.selxUserId}</p>
-              </div>
-              {data.credentials.selxUserSlug ? (
-                <div>
-                  <p className="text-muted">User slug</p>
-                  <p className="font-mono">{data.credentials.selxUserSlug}</p>
-                </div>
-              ) : null}
-              <div>
-                <p className="text-muted">Bearer token</p>
-                {data.credentials.apiToken ? (
-                  <div className="mt-1 flex items-center gap-2">
-                    <code className="block max-w-full truncate rounded-lg bg-slate-100 px-2 py-1 font-mono text-xs">
-                      {data.credentials.apiToken}
-                    </code>
-                    <Button variant="secondary" onClick={copyToken}>
-                      {copied ? "Copied" : "Copy"}
-                    </Button>
-                  </div>
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-muted">Status</span>
+                {data.credentials.hasToken ? (
+                  <Badge tone="green">Ready to call</Badge>
                 ) : (
-                  <p className="text-warning">Waiting for backend webhook credentials...</p>
+                  <Badge tone="yellow">Setting up…</Badge>
                 )}
               </div>
               <p className="text-xs text-muted">
-                Use headers: <code>Authorization: Bearer TOKEN</code> and{" "}
-                <code>X-User-Id: {data.credentials.selxUserId}</code>
+                {data.credentials.hasToken
+                  ? "Your calling account is active. Use the dialer to place calls; minutes are drawn from your package balance."
+                  : "We're provisioning your calling account with the backend. This usually takes a moment."}
               </p>
             </div>
           )}

@@ -65,7 +65,8 @@ export async function POST(req: Request) {
       });
 
       await writeAudit({
-        actorId: existing.userId,
+        actorId: existing.storeId,
+        actorType: "STORE_USER",
         action: "SELX_CREDENTIALS_SAVED",
         entityType: "SelxCredential",
         entityId: existing.id,
@@ -102,7 +103,8 @@ export async function POST(req: Request) {
       }
 
       await writeAudit({
-        actorId: existing.userId,
+        actorId: existing.storeId,
+        actorType: "STORE_USER",
         action: "SELX_CREDENTIALS_REGENERATED",
         entityType: "SelxCredential",
         entityId: existing.id,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { requireStore } from "@/lib/auth";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/api";
 import { env } from "@/lib/env";
 import { writeAudit } from "@/lib/audit";
@@ -11,9 +11,9 @@ const bodySchema = z.object({
 
 export async function GET() {
   try {
-    const { user } = await requireUser();
+    const { store } = await requireStore();
     const orders = await prisma.order.findMany({
-      where: { userId: user.id },
+      where: { storeId: store.id },
       orderBy: { createdAt: "desc" },
       include: { payment: true, subscription: true },
     });
@@ -25,11 +25,11 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { user } = await requireUser();
+    const { storeUser, store } = await requireStore();
     const body = bodySchema.parse(await req.json());
 
     const kyc = await prisma.kycSubmission.findUnique({
-      where: { userId: user.id },
+      where: { storeId: store.id },
     });
     if (!kyc || kyc.status !== "APPROVED") {
       return jsonError("Complete and get KYC approved before buying a package", 403);
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
     const order = await prisma.order.create({
       data: {
-        userId: user.id,
+        storeId: store.id,
         packageId: pkg.id,
         packageCode: pkg.code,
         packageName: pkg.name,
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
         status: "PENDING_PAYMENT",
         payment: {
           create: {
-            provider: env.payment.mode === "mock" ? "mock" : "webhook",
+            provider: env.payment.mode,
             amountBdt: pkg.priceBdt,
             status: "PENDING",
           },
@@ -64,7 +64,8 @@ export async function POST(req: Request) {
     });
 
     await writeAudit({
-      actorId: user.id,
+      actorId: storeUser.id,
+      actorType: "STORE_USER",
       action: "ORDER_CREATED",
       entityType: "Order",
       entityId: order.id,

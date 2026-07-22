@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { env } from "@/lib/env";
-import { requireUser } from "@/lib/auth";
+import { requireStore } from "@/lib/auth";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { markOrderPaid } from "@/lib/payment";
@@ -16,11 +16,11 @@ export async function POST(req: Request) {
       return jsonError("Mock payment is disabled", 403);
     }
 
-    const { user } = await requireUser();
+    const { store } = await requireStore();
     const body = bodySchema.parse(await req.json());
 
     const order = await prisma.order.findFirst({
-      where: { id: body.orderId, userId: user.id },
+      where: { id: body.orderId, storeId: store.id },
     });
     if (!order) return jsonError("Order not found", 404);
 

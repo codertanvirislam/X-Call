@@ -8,7 +8,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await getSession();
   // /admin/login is outside this group path - this layout wraps /admin/*
   if (!session) redirect("/login");
-  if (session.role !== "ADMIN") redirect("/dashboard");
+  if (session.kind !== "ADMIN") redirect("/dashboard");
 
   return (
     <div className="min-h-screen bg-slate-50">

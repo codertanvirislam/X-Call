@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function UserLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.role === "ADMIN") redirect("/admin");
+  if (session.kind !== "STORE") redirect("/admin");
 
   return (
     <div className="min-h-screen">

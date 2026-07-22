@@ -1,16 +1,38 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f7fb;
-  --foreground: #0f172a;
+  /* Base neutrals — Clean SaaS */
+  --background: #f6f7fb;
+  --foreground: #1a1a3d;
   --card: #ffffff;
-  --muted: #64748b;
-  --primary: #0f766e;
-  --primary-hover: #0d9488;
-  --border: #e2e8f0;
+  --muted: #6b7192;
+
+  /* Brand primary = Selorax navy */
+  --primary: #2c2976;
+  --primary-hover: #232063;
+  --primary-soft: #eeeefb;
+
+  /* Accent = Selorax orange */
+  --accent: #ff8224;
+  --accent-hover: #e8691a;
+  --accent-soft: #fff3e8;
+
+  /* Lines & semantic */
+  --border: #e6e8f2;
   --danger: #dc2626;
   --warning: #d97706;
   --success: #059669;
+
+  /* Selorax brand tokens */
+  --navy: #2c2976;
+  --navy-deep: #232063;
+  --orange: #ff8224;
+  --orange-deep: #e8691a;
+  --ink: #1a1a3d;
+  --brand-slate: #5b6178;
+  --brand-slate-soft: #8a8fa3;
+  --surface: #f7f8fc;
+  --line: #e6e8f2;
 }
 
 @theme inline {
@@ -18,13 +40,36 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-muted: var(--muted);
+
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+
   --color-border: var(--border);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
   --color-success: var(--success);
-  --font-sans: var(--font-geist-sans);
+
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-orange: var(--orange);
+  --color-orange-deep: var(--orange-deep);
+  --color-ink: var(--ink);
+  --color-brand-slate: var(--brand-slate);
+  --color-brand-slate-soft: var(--brand-slate-soft);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+
+  /* Premium soft shadow system */
+  --shadow-soft: 0 1px 3px rgba(28, 25, 90, 0.08);
+  --shadow-card: 0 1px 2px rgba(28, 25, 90, 0.04), 0 6px 20px rgba(28, 25, 90, 0.06);
+  --shadow-lift: 0 10px 34px rgba(28, 25, 90, 0.12);
+
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-space-grotesk);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -39,4 +84,8 @@ select,
 textarea,
 button {
   font: inherit;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
 }

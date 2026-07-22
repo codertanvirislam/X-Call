@@ -1,7 +1,6 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
-import { getSession, type SessionPayload } from "./session";
-import type { Role } from "@/generated/prisma/client";
+import { getSession, type SessionKind, type SessionPayload } from "./session";
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 12);
@@ -19,29 +18,44 @@ export function validatePassword(password: string): string | null {
   return null;
 }
 
-export async function requireSession(roles?: Role[]): Promise<SessionPayload> {
+export async function requireSession(kinds?: SessionKind[]): Promise<SessionPayload> {
   const session = await getSession();
   if (!session) {
     throw new AuthError("Unauthorized", 401);
   }
-  if (roles && !roles.includes(session.role)) {
+  if (kinds && !kinds.includes(session.kind)) {
     throw new AuthError("Forbidden", 403);
   }
   return session;
 }
 
-export async function requireUser() {
-  const session = await requireSession(["USER", "ADMIN"]);
-  const user = await prisma.user.findUnique({ where: { id: session.userId } });
-  if (!user) throw new AuthError("Unauthorized", 401);
-  return { session, user };
-}
-
 export async function requireAdmin() {
   const session = await requireSession(["ADMIN"]);
-  const user = await prisma.user.findUnique({ where: { id: session.userId } });
-  if (!user || user.role !== "ADMIN") throw new AuthError("Forbidden", 403);
-  return { session, user };
+  const admin = await prisma.admin.findUnique({ where: { id: session.userId } });
+  if (!admin) throw new AuthError("Forbidden", 403);
+  return { session, admin };
+}
+
+/** Authenticated store person (owner or employee). Loads the StoreUser and its Store. */
+export async function requireStore() {
+  const session = await requireSession(["STORE"]);
+  const storeUser = await prisma.storeUser.findUnique({
+    where: { id: session.userId },
+    include: { store: true },
+  });
+  if (!storeUser || storeUser.status === "DISABLED") {
+    throw new AuthError("Unauthorized", 401);
+  }
+  return { session, storeUser, store: storeUser.store };
+}
+
+/** Store owner only — required to manage employees. */
+export async function requireStoreOwner() {
+  const ctx = await requireStore();
+  if (ctx.storeUser.role !== "OWNER") {
+    throw new AuthError("Only the store owner can do this", 403);
+  }
+  return ctx;
 }
 
 export class AuthError extends Error {

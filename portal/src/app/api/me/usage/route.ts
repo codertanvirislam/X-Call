@@ -1,17 +1,17 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { requireStore } from "@/lib/auth";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/api";
 import { decryptSecret } from "@/lib/crypto";
 import { selxTenantGet, type SelxCall } from "@/lib/selx";
 
 export async function GET(req: Request) {
   try {
-    const { user } = await requireUser();
+    const { store } = await requireStore();
     const { searchParams } = new URL(req.url);
     const limit = Math.min(Number(searchParams.get("limit") || 20), 100);
 
     const cred = await prisma.selxCredential.findUnique({
-      where: { userId: user.id },
+      where: { storeId: store.id },
     });
     if (!cred?.bearerTokenEnc) {
       return jsonError("No API credentials yet", 404);

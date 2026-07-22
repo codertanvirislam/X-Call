@@ -10,9 +10,15 @@ datasource db {
   provider = "mysql"
 }
 
-enum Role {
-  USER
-  ADMIN
+enum StoreRole {
+  OWNER
+  EMPLOYEE
+}
+
+enum StoreUserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
 }
 
 enum KycStatus {
@@ -34,6 +40,7 @@ enum OrderStatus {
   ACTIVE
   PAYMENT_FAILED
   PROVISIONING_FAILED
+  CANCELLED
 }
 
 enum SubscriptionStatus {
@@ -50,23 +57,48 @@ enum PaymentStatus {
   CANCELLED
 }
 
-model User {
+// Platform staff — separate from stores. Reviews KYC, manages packages/orders.
+model Admin {
   id              String    @id @default(cuid())
   phone           String    @unique
   name            String?
   passwordHash    String?
-  role            Role      @default(USER)
   phoneVerifiedAt DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
 
+// The reseller business account. Owns all business data (KYC, orders, subs, credentials).
+model Store {
+  id        String   @id @default(cuid())
+  name      String? // business/legal name (set from KYC fullName)
+  phone     String? // primary contact = owner's phone at signup (used for SELX provisioning)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members        StoreUser[]
   kyc            KycSubmission?
   orders         Order[]
   subscriptions  Subscription[]
   selxCredential SelxCredential?
-  auditLogs      AuditLog[]      @relation("AuditActor")
+}
 
-  @@index([role])
+// A person who logs into a store: one OWNER + multiple EMPLOYEEs, each with their own login.
+model StoreUser {
+  id              String          @id @default(cuid())
+  storeId         String
+  store           Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  phone           String          @unique
+  name            String?
+  passwordHash    String?
+  role            StoreRole       @default(OWNER)
+  status          StoreUserStatus @default(INVITED) // INVITED until password is set
+  phoneVerifiedAt DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([storeId])
+  @@index([storeId, role])
 }
 
 model OtpChallenge {
@@ -85,8 +117,8 @@ model OtpChallenge {
 
 model KycSubmission {
   id            String    @id @default(cuid())
-  userId        String    @unique
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeId       String    @unique
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   fullName      String
   nidNumber     String
   frontFileKey  String
@@ -94,7 +126,7 @@ model KycSubmission {
   frontMimeType String
   backMimeType  String
   status        KycStatus @default(PENDING)
-  rejectReason  String?
+  rejectReason  String?   @db.Text
   reviewedById  String?
   reviewedAt    DateTime?
   createdAt     DateTime  @default(now())
@@ -108,12 +140,12 @@ model Package {
   id           String      @id @default(cuid())
   code         String      @unique
   name         String
-  description  String?
+  description  String?     @db.Text
   serviceType  ServiceType
   priceBdt     Int
   minutes      Int
   validityDays Int
-  features     String      @default("")
+  features     String      @default("") @db.VarChar(1000)
   isActive     Boolean     @default(true)
   sortOrder    Int         @default(0)
   createdAt    DateTime    @default(now())
@@ -124,8 +156,8 @@ model Package {
 
 model Order {
   id             String      @id @default(cuid())
-  userId         String
-  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeId        String
+  store          Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
   packageId      String
   package        Package     @relation(fields: [packageId], references: [id])
   packageCode    String
@@ -134,9 +166,10 @@ model Order {
   priceBdt       Int
   minutes        Int
   validityDays   Int
-  features       String
+  features       String      @db.VarChar(1000)
   status         OrderStatus @default(PENDING_PAYMENT)
-  provisionError String?
+  provisionError String?     @db.Text
+  minutesCreditedAt DateTime? // set once the backend top-up succeeds; guards against double-crediting on retry
   paidAt         DateTime?
   activatedAt    DateTime?
   expiresAt      DateTime?
@@ -146,7 +179,7 @@ model Order {
   payment      Payment?
   subscription Subscription?
 
-  @@index([userId, status])
+  @@index([storeId, status])
   @@index([status])
 }
 
@@ -158,7 +191,7 @@ model Payment {
   providerPaymentId String?
   amountBdt         Int
   status            PaymentStatus @default(PENDING)
-  rawPayload        String?
+  rawPayload        String?       @db.Text
   paidAt            DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
@@ -169,8 +202,8 @@ model Payment {
 
 model Subscription {
   id           String             @id @default(cuid())
-  userId       String
-  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeId      String
+  store        Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
   orderId      String             @unique
   order        Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
   serviceType  ServiceType
@@ -183,20 +216,20 @@ model Subscription {
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
 
-  @@index([userId, status])
+  @@index([storeId, status])
   @@index([expiresAt, status])
 }
 
 model SelxCredential {
   id                   String   @id @default(cuid())
-  userId               String   @unique
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeId              String   @unique
+  store                Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   selxUserId           Int
   selxUserSlug         String?
-  bearerTokenEnc       String
+  bearerTokenEnc       String   @db.Text
   extension            String?
-  extensionPasswordEnc String?
-  webhookSecretEnc     String?
+  extensionPasswordEnc String?  @db.Text
+  webhookSecretEnc     String?  @db.Text
   phoneNumber          String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -205,11 +238,11 @@ model SelxCredential {
 model AuditLog {
   id         String   @id @default(cuid())
   actorId    String?
-  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorType  String? // "ADMIN" | "STORE_USER"
   action     String
   entityType String?
   entityId   String?
-  meta       String?
+  meta       String?  @db.Text
   createdAt  DateTime @default(now())
 
   @@index([entityType, entityId])

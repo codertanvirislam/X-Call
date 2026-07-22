@@ -19,6 +19,14 @@ export function handleRouteError(err: unknown) {
       issues: err.issues,
     });
   }
+  // Any Error subclass carrying an explicit numeric HTTP status (e.g. CallingError).
+  if (
+    err instanceof Error &&
+    "status" in err &&
+    typeof (err as { status: unknown }).status === "number"
+  ) {
+    return jsonError(err.message, (err as { status: number }).status);
+  }
   console.error(err);
   const message = err instanceof Error ? err.message : "Server error";
   return jsonError(message, 500);

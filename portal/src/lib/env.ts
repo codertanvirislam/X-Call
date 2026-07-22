@@ -22,7 +22,10 @@ export const env = {
 
   sms: {
     apiUrl: optional("SMS_API_URL"),
-    apiKey: optional("SMS_API_KEY"),
+    // Anbernet token-based auth; falls back to legacy SMS_API_KEY if set.
+    token: optional("SMS_TOKEN") || optional("SMS_API_KEY"),
+    account: optional("SMS_ACCOUNT"),
+    password: optional("SMS_PASSWORD"),
     senderId: optional("SMS_SENDER_ID"),
     devMode:
       optional("SMS_DEV_MODE", "true") === "true" ||
@@ -42,14 +45,30 @@ export const env = {
 
   selx: {
     baseUrl: optional("SELX_BASE_URL").replace(/\/$/, ""),
+    sipBaseUrl: optional("SELX_SIP_BASE_URL").replace(/\/$/, ""),
     partnerApiKey: optional("SELX_PARTNER_API_KEY"),
     partnerWebhookSecret: optional("SELX_PARTNER_WEBHOOK_SECRET"),
     defaultBridgeNumber: optional("SELX_DEFAULT_BRIDGE_NUMBER"),
   },
 
   payment: {
-    mode: optional("PAYMENT_MODE", "mock") as "mock" | "webhook",
+    mode: optional("PAYMENT_MODE", "mock") as "mock" | "webhook" | "eps",
     webhookSecret: optional("PAYMENT_WEBHOOK_SECRET", "dev-payment-secret"),
+  },
+
+  eps: {
+    baseUrl: optional("EPS_BASE_URL", "https://pgapi.eps.com.bd").replace(/\/$/, ""),
+    username: optional("EPS_USERNAME"),
+    password: optional("EPS_PASSWORD"),
+    hashKey: optional("EPS_HASH_KEY"),
+    merchantId: optional("EPS_MERCHANT_ID"),
+    storeId: optional("EPS_STORE_ID"),
+    // Reserved for a future server-to-server IPN endpoint; the redirect callback
+    // is authenticated by re-verifying with EPS, so it does not use this list.
+    allowedIps: optional("EPS_ALLOWED_IPS")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
   },
 
   admin: {

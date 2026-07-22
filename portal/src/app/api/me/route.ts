@@ -1,16 +1,15 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { requireStore } from "@/lib/auth";
 import { handleRouteError, jsonOk } from "@/lib/api";
-import { decryptSecret } from "@/lib/crypto";
 import { expireDueSubscriptions } from "@/lib/provisioning";
 
 export async function GET() {
   try {
-    const { user } = await requireUser();
+    const { storeUser, store } = await requireStore();
     await expireDueSubscriptions();
 
-    const full = await prisma.user.findUnique({
-      where: { id: user.id },
+    const full = await prisma.store.findUnique({
+      where: { id: store.id },
       include: {
         kyc: true,
         selxCredential: true,
@@ -26,23 +25,22 @@ export async function GET() {
       },
     });
 
-    if (!full) throw new Error("User not found");
+    if (!full) throw new Error("Store not found");
 
-    let apiToken: string | null = null;
-    if (full.selxCredential?.bearerTokenEnc) {
-      try {
-        apiToken = decryptSecret(full.selxCredential.bearerTokenEnc);
-      } catch {
-        apiToken = null;
-      }
-    }
+    // The raw bearer token is intentionally NOT returned to the browser.
+    // Customers call from the platform; the token stays server-side only.
+    const hasToken = Boolean(full.selxCredential?.bearerTokenEnc);
 
     return jsonOk({
       user: {
+        id: storeUser.id,
+        phone: storeUser.phone,
+        name: storeUser.name,
+        role: storeUser.role, // OWNER | EMPLOYEE
+      },
+      store: {
         id: full.id,
-        phone: full.phone,
         name: full.name,
-        role: full.role,
       },
       kyc: full.kyc
         ? {
@@ -57,9 +55,7 @@ export async function GET() {
         ? {
             selxUserId: full.selxCredential.selxUserId,
             selxUserSlug: full.selxCredential.selxUserSlug,
-            apiToken,
-            hasToken: Boolean(apiToken),
-            extension: full.selxCredential.extension,
+            hasToken,
           }
         : null,
       subscriptions: full.subscriptions,

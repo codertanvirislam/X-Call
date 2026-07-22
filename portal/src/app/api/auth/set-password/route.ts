@@ -12,37 +12,40 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const session = await requireSession();
+    const session = await requireSession(["STORE"]);
     const body = bodySchema.parse(await req.json());
     const pwdError = validatePassword(body.password);
     if (pwdError) return jsonError(pwdError);
 
     const passwordHash = await hashPassword(body.password);
-    const user = await prisma.user.update({
+    const storeUser = await prisma.storeUser.update({
       where: { id: session.userId },
       data: {
         passwordHash,
+        status: "ACTIVE",
         name: body.name || undefined,
       },
     });
 
     await setSessionCookie({
-      userId: user.id,
-      role: user.role,
-      phone: user.phone,
+      kind: "STORE",
+      userId: storeUser.id,
+      phone: storeUser.phone,
+      storeId: storeUser.storeId,
+      storeRole: storeUser.role,
     });
 
     await writeAudit({
-      actorId: user.id,
+      actorId: storeUser.id,
+      actorType: "STORE_USER",
       action: "PASSWORD_SET",
-      entityType: "User",
-      entityId: user.id,
+      entityType: "StoreUser",
+      entityId: storeUser.id,
     });
 
     return jsonOk({
       ok: true,
-      role: user.role,
-      redirectTo: user.role === "ADMIN" ? "/admin" : "/dashboard",
+      redirectTo: "/dashboard",
     });
   } catch (err) {
     return handleRouteError(err);

@@ -15,7 +15,7 @@ export async function GET(req: Request) {
       where: status === "ALL" ? undefined : { status: status as "PENDING" | "APPROVED" | "REJECTED" },
       orderBy: { createdAt: "desc" },
       include: {
-        user: {
+        store: {
           select: { id: true, phone: true, name: true, createdAt: true },
         },
       },
@@ -50,7 +50,7 @@ const reviewSchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    const { user: admin } = await requireAdmin();
+    const { admin } = await requireAdmin();
     const body = reviewSchema.parse(await req.json());
 
     const kyc = await prisma.kycSubmission.findUnique({
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
       action: body.action === "APPROVE" ? "KYC_APPROVED" : "KYC_REJECTED",
       entityType: "KycSubmission",
       entityId: kyc.id,
-      meta: { userId: kyc.userId, rejectReason: body.rejectReason },
+      meta: { storeId: kyc.storeId, rejectReason: body.rejectReason },
     });
 
     return jsonOk({ ok: true, kyc: updated });

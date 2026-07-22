@@ -1,13 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth";
+import { requireStore } from "@/lib/auth";
 import { handleRouteError, jsonError, jsonOk } from "@/lib/api";
 import { ALLOWED_KYC_MIME, MAX_KYC_BYTES, uploadKycFile } from "@/lib/s3";
 import { writeAudit } from "@/lib/audit";
 
 export async function GET() {
   try {
-    const { user } = await requireUser();
-    const kyc = await prisma.kycSubmission.findUnique({ where: { userId: user.id } });
+    const { store } = await requireStore();
+    const kyc = await prisma.kycSubmission.findUnique({ where: { storeId: store.id } });
     return jsonOk({ kyc: kyc ?? { status: "NOT_STARTED" } });
   } catch (err) {
     return handleRouteError(err);
@@ -16,10 +16,10 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { user } = await requireUser();
+    const { storeUser, store } = await requireStore();
 
     const existing = await prisma.kycSubmission.findUnique({
-      where: { userId: user.id },
+      where: { storeId: store.id },
     });
     if (existing?.status === "APPROVED") {
       return jsonError("KYC already approved");
@@ -53,22 +53,22 @@ export async function POST(req: Request) {
     const backBuf = Buffer.from(await back.arrayBuffer());
 
     const frontFileKey = await uploadKycFile({
-      userId: user.id,
+      userId: store.id,
       side: "front",
       mimeType: front.type,
       body: frontBuf,
     });
     const backFileKey = await uploadKycFile({
-      userId: user.id,
+      userId: store.id,
       side: "back",
       mimeType: back.type,
       body: backBuf,
     });
 
     const kyc = await prisma.kycSubmission.upsert({
-      where: { userId: user.id },
+      where: { storeId: store.id },
       create: {
-        userId: user.id,
+        storeId: store.id,
         fullName,
         nidNumber,
         frontFileKey,
@@ -94,13 +94,14 @@ export async function POST(req: Request) {
       },
     });
 
-    await prisma.user.update({
-      where: { id: user.id },
+    await prisma.store.update({
+      where: { id: store.id },
       data: { name: fullName },
     });
 
     await writeAudit({
-      actorId: user.id,
+      actorId: storeUser.id,
+      actorType: "STORE_USER",
       action: "KYC_SUBMITTED",
       entityType: "KycSubmission",
       entityId: kyc.id,

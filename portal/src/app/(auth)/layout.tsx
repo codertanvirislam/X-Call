@@ -1,10 +1,7 @@
-import { PublicNav } from "@/components/nav";
-
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen">
-      <PublicNav />
-      <main className="mx-auto flex max-w-md flex-col px-4 py-10">{children}</main>
+    <div className="flex min-h-screen items-center justify-center bg-[#f4f4fa] px-6 py-10">
+      <div className="w-full max-w-[400px]">{children}</div>
     </div>
   );
 }

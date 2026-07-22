@@ -16,7 +16,7 @@ export async function provisionPaidOrder(orderId: string) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
-      user: { include: { selxCredential: true, kyc: true } },
+      store: { include: { selxCredential: true, kyc: true } },
       payment: true,
     },
   });
@@ -35,38 +35,47 @@ export async function provisionPaidOrder(orderId: string) {
   });
 
   try {
-    let selxUserId = order.user.selxCredential?.selxUserId;
+    let selxUserId = order.store.selxCredential?.selxUserId;
 
     if (!selxUserId) {
-      if (order.user.kyc?.status !== "APPROVED") {
+      if (order.store.kyc?.status !== "APPROVED") {
         throw new Error("KYC must be approved before provisioning");
       }
 
+      const storePhone = order.store.phone || "";
       const created = await selxCreateUser({
-        name: order.user.kyc.fullName || order.user.name || order.user.phone,
-        phoneNumber: order.user.phone,
+        name: order.store.kyc.fullName || order.store.name || storePhone,
+        phoneNumber: storePhone,
       });
       selxUserId = created.user_id;
 
       // Placeholder row until webhook delivers bearer token
       await prisma.selxCredential.upsert({
-        where: { userId: order.userId },
+        where: { storeId: order.storeId },
         create: {
-          userId: order.userId,
+          storeId: order.storeId,
           selxUserId,
           selxUserSlug: created.user_slug,
           bearerTokenEnc: "",
-          phoneNumber: order.user.phone,
+          phoneNumber: storePhone,
         },
         update: {
           selxUserId,
           selxUserSlug: created.user_slug,
-          phoneNumber: order.user.phone,
+          phoneNumber: storePhone,
         },
       });
     }
 
-    await selxTopUpMinutes(selxUserId, order.minutes);
+    // Credit the package minutes exactly once per order. If a later step fails
+    // and an admin retries provisioning, this guard prevents double-crediting.
+    if (!order.minutesCreditedAt) {
+      await selxTopUpMinutes(selxUserId, order.minutes);
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { minutesCreditedAt: new Date() },
+      });
+    }
 
     const features = order.features
       .split(",")
@@ -83,7 +92,7 @@ export async function provisionPaidOrder(orderId: string) {
     await prisma.$transaction(async (tx) => {
       await tx.subscription.create({
         data: {
-          userId: order.userId,
+          storeId: order.storeId,
           orderId: order.id,
           serviceType: order.serviceType,
           packageCode: order.packageCode,
@@ -107,7 +116,8 @@ export async function provisionPaidOrder(orderId: string) {
     });
 
     await writeAudit({
-      actorId: order.userId,
+      actorId: order.storeId,
+      actorType: "STORE_USER",
       action: "ORDER_PROVISIONED",
       entityType: "Order",
       entityId: order.id,
@@ -125,7 +135,8 @@ export async function provisionPaidOrder(orderId: string) {
       },
     });
     await writeAudit({
-      actorId: order.userId,
+      actorId: order.storeId,
+      actorType: "STORE_USER",
       action: "ORDER_PROVISION_FAILED",
       entityType: "Order",
       entityId: order.id,

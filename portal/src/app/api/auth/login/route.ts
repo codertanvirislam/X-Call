@@ -17,31 +17,53 @@ export async function POST(req: Request) {
     const phone = normalizeBdPhone(body.phone);
     if (!phone) return jsonError("Invalid phone number");
 
-    const user = await prisma.user.findUnique({ where: { phone } });
-    if (!user?.passwordHash) {
+    // Platform admins resolve first.
+    const admin = await prisma.admin.findUnique({ where: { phone } });
+    if (admin?.passwordHash && (await verifyPassword(body.password, admin.passwordHash))) {
+      await setSessionCookie({
+        kind: "ADMIN",
+        userId: admin.id,
+        phone: admin.phone,
+      });
+      await writeAudit({
+        actorId: admin.id,
+        actorType: "ADMIN",
+        action: "LOGIN",
+        entityType: "Admin",
+        entityId: admin.id,
+      });
+      return jsonOk({ ok: true, role: "ADMIN", redirectTo: "/admin" });
+    }
+
+    const storeUser = await prisma.storeUser.findUnique({ where: { phone } });
+    if (
+      !storeUser?.passwordHash ||
+      storeUser.status === "DISABLED" ||
+      !(await verifyPassword(body.password, storeUser.passwordHash))
+    ) {
       return jsonError("Invalid phone or password", 401);
     }
 
-    const ok = await verifyPassword(body.password, user.passwordHash);
-    if (!ok) return jsonError("Invalid phone or password", 401);
-
     await setSessionCookie({
-      userId: user.id,
-      role: user.role,
-      phone: user.phone,
+      kind: "STORE",
+      userId: storeUser.id,
+      phone: storeUser.phone,
+      storeId: storeUser.storeId,
+      storeRole: storeUser.role,
     });
 
     await writeAudit({
-      actorId: user.id,
+      actorId: storeUser.id,
+      actorType: "STORE_USER",
       action: "LOGIN",
-      entityType: "User",
-      entityId: user.id,
+      entityType: "StoreUser",
+      entityId: storeUser.id,
     });
 
     return jsonOk({
       ok: true,
-      role: user.role,
-      redirectTo: user.role === "ADMIN" ? "/admin" : "/dashboard",
+      role: "STORE",
+      redirectTo: "/dashboard",
     });
   } catch (err) {
     return handleRouteError(err);
